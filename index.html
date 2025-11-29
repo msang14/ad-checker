@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>작대 광고 실시간 점검</title>
+<style>
+body{font-family:'맑은 고딕';text-align:center;padding:40px;background:#f8f9fa;}
+h1{color:#1a73e8;margin-bottom:30px;}
+button{padding:20px 50px;font-size:24px;background:#1a73e8;color:white;border:none;border-radius:12px;cursor:pointer;}
+#result{max-width:800px;margin:30px auto;background:white;padding:30px;border-radius:15px;box-shadow:0 6px 25px #0001;font-size:18px;line-height:1.8;}
+.ok{background:#d1e7dd;padding:20px;border-radius:10px;margin:15px 0;}
+.no{background:#f8d7da;padding:20px;border-radius:10px;margin:15px 0;}
+.detail{font-size:15px;color:#555;margin-top:10px;}
+</style>
+</head>
+<body>
+<h1>작대 광고 실시간 점검기</h1>
+<button onclick="startCheck()">클릭하면 현재 상태 상세 확인</button>
+<div id="result">버튼을 누르면 바로 검사 시작됩니다</div>
+
+<script>
+// ★★★ 나중에 추가하고 싶을 때 여기만 한 줄씩 넣으면 됨 ★★★
+const ADS = [
+  "작대 sites.google.com/view/vanbinhmai12"
+  // "작대가격 sites.google.com/view/vanbinhmai12"
+];
+
+async function startCheck() {
+  document.getElementById("result").innerHTML = "<b>검사 시작 중...</b>";
+  let ok = [], no = [];
+
+  for(let item of ADS) {
+    let [keyword, domain] = item.trim().split(" ");
+    let status = "";
+    let detail = "";
+
+    try {
+      let res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(
+        "https://www.google.co.kr/search?q=" + encodeURIComponent(keyword) + "&gl=kr&hl=ko&num=30"
+      ), {timeout: 15000});
+      let html = await res.text();
+
+      // 1. 광고 영역 있는지
+      let hasAdBlock = /data-text-ad="1"|ads\.g\.doubleclick\.net|googleadservices/.test(html);
+      
+      // 2. 내 사이트 있는지
+      let hasMySite = html.includes(domain) || html.includes("vanbinhmai12");
+
+      if (!hasAdBlock) {
+        status = "광고 영역 자체가 없습니다 (검색량 부족 또는 예산 소진)";
+        detail = "→ Google이 아예 광고를 안 띄우고 있음";
+        no.push({keyword, status, detail});
+      }
+      else if (hasAdBlock && !hasMySite) {
+        status = "광고는 뜨고 있지만 내 광고는 밀려서 안 보임";
+        detail = "→ 경쟁자 입찰가/품질점수 더 높음<br>→ 현재 상위 1~4위에 다른 광고주만 노출 중";
+        no.push({keyword, status, detail});
+      }
+      else {
+        status = "정상 노출 중 (상위 광고에 내 사이트 보임)";
+        detail = "→ 클릭 유도 가능 상태";
+        ok.push({keyword, status, detail});
+      }
+
+    } catch(e) {
+      status = "검사 실패 (네트워크 또는 프록시 차단)";
+      detail = "→ 1~2분 후 다시 시도 추천";
+      no.push({keyword, status, detail});
+    }
+
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
+  // 결과 출력
+  let html = `<b>검사 완료 (${new Date().toLocaleString('ko-KR')})</b><br><br>`;
+
+  if(ok.length > 0){
+    html += `<div class="ok"><b>정상 노출 중</b><br>`;
+    ok.forEach(x=> html += `<br>• ${x.keyword}<br>　└ ${x.status}<br><span class="detail">　　${x.detail}</span>`);
+    html += `</div>`;
+  }
+
+  if(no.length > 0){
+    html += `<div class="no"><b>문제 있음 – 즉시 확인 필요</b><br>`;
+    no.forEach(x=> html += `<br>• ${x.keyword}<br>　└ ${x.status}<br><span class="detail">　　${x.detail}</span>`);
+    html += `</div>`;
+  }
+
+  if(ok.length===0 && no.length===0) html += "광고 목록이 없습니다.";
+
+  document.getElementById("result").innerHTML = html;
+}
+</script>
+</body>
+</html>
